@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="WMail.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:WMail.App.ViewModels"
+    xmlns:core="using:WMail.Core"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="w-mail">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 顶栏 -->
+        <Grid Grid.Row="0" Padding="12,10,12,4" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="w-mail" FontSize="18" FontWeight="SemiBold"
+                       VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <ComboBox Grid.Column="1" MinWidth="230" VerticalAlignment="Center"
+                      ItemsSource="{x:Bind Vm.Accounts, Mode=OneWay}"
+                      SelectedItem="{x:Bind Vm.SelectedAccount, Mode=TwoWay}"
+                      DisplayMemberPath="DisplayName"/>
+            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8">
+                <Button Content="添加账户" Click="OnAddAccount"/>
+                <Button Content="写邮件" Click="OnCompose" Style="{StaticResource AccentButtonStyle}"
+                        IsEnabled="{x:Bind Vm.HasAccount, Mode=OneWay}"/>
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1" Padding="12,4,12,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="260"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 文件夹栏 -->
+            <Border Grid.Column="0"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="6" Margin="0,0,8,0">
+                <ListView ItemsSource="{x:Bind Vm.Folders, Mode=OneWay}"
+                          SelectedItem="{x:Bind Vm.SelectedFolder, Mode=TwoWay}"
+                          SelectionMode="Single">
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="vm:FolderVm">
+                            <Grid Padding="4,8" ColumnSpacing="6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{x:Bind DisplayName}"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                <Border Grid.Column="1" CornerRadius="9" Padding="7,1"
+                                        Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                        Visibility="{x:Bind BadgeVisibility, Mode=OneWay}">
+                                    <TextBlock Text="{x:Bind Badge, Mode=OneWay}" FontSize="11" Foreground="White"/>
+                                </Border>
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </Border>
+
+            <!-- 右侧区 -->
+            <Grid Grid.Column="1">
+                <!-- 无账户欢迎页 -->
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12"
+                            Visibility="{x:Bind ShowWelcome(Vm.HasAccount), Mode=OneWay}">
+                    <TextBlock Text="欢迎使用 w-mail" FontSize="24" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                    <TextBlock Text="先添加一个邮箱账户,开始收发邮件。" HorizontalAlignment="Center" Opacity="0.7"/>
+                    <Button Content="添加账户" Click="OnAddAccount" Style="{StaticResource AccentButtonStyle}"
+                            HorizontalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- 列表 + 阅读 双栏 -->
+                <Grid Visibility="{x:Bind HideWelcome(Vm.HasAccount), Mode=OneWay}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="380" MinWidth="280"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <ListView Grid.Column="0"
+                              ItemsSource="{x:Bind Vm.Messages, Mode=OneWay}"
+                              SelectedItem="{x:Bind Vm.SelectedMessage, Mode=TwoWay}"
+                              SelectionMode="Single">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:MessageVm">
+                                <StackPanel Padding="8,6" Spacing="2">
+                                    <Grid ColumnSpacing="6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Ellipse Grid.Column="0" Width="8" Height="8"
+                                                 Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                                 VerticalAlignment="Center"
+                                                 Visibility="{x:Bind UnreadDotVisibility, Mode=OneWay}"/>
+                                        <TextBlock Grid.Column="1" Text="{x:Bind Subject}" FontSize="14"
+                                                   FontWeight="{x:Bind TitleWeight, Mode=OneWay}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Grid.Column="2" Text="{x:Bind DateText}" FontSize="11" Opacity="0.6"/>
+                                    </Grid>
+                                    <TextBlock Text="{x:Bind FromDisplay}" FontSize="12" Opacity="0.8"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{x:Bind Snippet}" FontSize="12" Opacity="0.5" MaxLines="1"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="★" FontSize="12" Foreground="Orange"
+                                                   Visibility="{x:Bind FlaggedVisibility, Mode=OneWay}"/>
+                                        <TextBlock Text="📎" FontSize="11"
+                                                   Visibility="{x:Bind AttachVisibility, Mode=OneWay}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+
+                    <!-- 阅读栏 -->
+                    <Grid Grid.Column="1" Margin="8,0,0,0"
+                          Visibility="{x:Bind Vm.MessageOpen, Mode=OneWay}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <StackPanel Grid.Row="0" Padding="8,4" Spacing="4">
+                            <TextBlock Text="{x:Bind Vm.SelectedMessage.Subject, Mode=OneWay}"
+                                       FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <TextBlock Text="{x:Bind Vm.SelectedMessage.FromDisplay, Mode=OneWay}" Opacity="0.8"/>
+                                <TextBlock Text="{x:Bind Vm.SelectedMessage.LongDate, Mode=OneWay}" Opacity="0.5"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,4,0,0">
+                                <Button Content="回复" Click="OnReply"/>
+                                <Button Content="全部回复" Click="OnReplyAll"/>
+                                <Button Content="转发" Click="OnForward"/>
+                                <Button Content="{x:Bind Vm.SelectedMessage.FlagButtonText, Mode=OneWay}" Click="OnToggleFlag"/>
+                                <Button Content="{x:Bind Vm.SelectedMessage.ReadButtonText, Mode=OneWay}" Click="OnToggleRead"/>
+                                <Button Content="移动…" Click="OnMove"/>
+                                <Button Content="删除" Click="OnDelete"/>
+                            </StackPanel>
+                        </StackPanel>
+                        <ItemsControl Grid.Row="1" Padding="8,2"
+                                      ItemsSource="{x:Bind Vm.SelectedMessage.Attachments, Mode=OneWay}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="core:AttachmentInfo">
+                                    <Button Content="{x:Bind FileName}" Click="OnOpenAttachment" Margin="0,0,6,6"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <WebView2 Grid.Row="2" x:Name="Reader"/>
+                    </Grid>
+
+                    <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Visibility="{x:Bind ShowReaderEmpty(Vm.MessageOpen), Mode=OneWay}">
+                        <TextBlock Text="选择一封邮件阅读" Opacity="0.5"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <!-- 状态栏 -->
+        <Border Grid.Row="2" Padding="12,4">
+            <TextBlock Text="{x:Bind Vm.StatusText, Mode=OneWay}" Opacity="0.6" FontSize="12"/>
+        </Border>
+    </Grid>
+</Window>
