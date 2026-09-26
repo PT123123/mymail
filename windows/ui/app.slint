@@ -44,6 +44,7 @@ export component MainWindow inherits Window {
     in property <bool> reader-seen: false;
 
     callback add-account-clicked();
+    callback delete-account-clicked();
     callback compose-clicked();
     callback account-changed(int);
     callback folder-selected(int);
@@ -66,7 +67,7 @@ export component MainWindow inherits Window {
             alignment: start;
             Text { text: "w-mail"; font-size: 18px; font-weight: 700; vertical-alignment: center; }
             ComboBox {
-                width: 240px;
+                width: 300px;
                 enabled: root.has-account;
                 model: root.account-names;
                 current-index <=> root.account-index;
@@ -76,6 +77,7 @@ export component MainWindow inherits Window {
             }
             Rectangle { }
             Button { text: "添加账户"; clicked => { root.add-account-clicked(); } }
+            Button { text: "删除账户"; enabled: root.has-account; clicked => { root.delete-account-clicked(); } }
             Button { text: "写邮件"; enabled: root.has-account; clicked => { root.compose-clicked(); } }
         }
 
@@ -317,9 +319,10 @@ export component MoveDialog inherits Window {
 
 export component AccountDialog inherits Window {
     title: "添加账户";
-    preferred-width: 540px;
-    preferred-height: 600px;
+    preferred-width: 560px;
+    preferred-height: 640px;
 
+    in-out property <[string]> preset-names;
     in-out property <string> display-name;
     in-out property <string> email;
     in-out property <string> password;
@@ -327,6 +330,7 @@ export component AccountDialog inherits Window {
     in-out property <string> imap-port: "993";
     in-out property <string> smtp-host;
     in-out property <string> smtp-port: "465";
+    in-out property <int> smtp-tls-index: 0;
     in-out property <string> status;
     in-out property <bool> busy: false;
 
@@ -339,11 +343,11 @@ export component AccountDialog inherits Window {
         padding: 14px;
         spacing: 8px;
         ComboBox {
-            model: ["自定义", "QQ 邮箱", "163 邮箱", "Gmail", "Outlook / M365"];
+            model: root.preset-names;
             current-index: 0;
             changed current-index => { root.preset-selected(self.current-index); }
         }
-        LineEdit { placeholder-text: "显示名称(可选)"; text <=> root.display-name; enabled: !root.busy; }
+        LineEdit { placeholder-text: "显示名称(可选,多账号时便于区分)"; text <=> root.display-name; enabled: !root.busy; }
         LineEdit { placeholder-text: "邮箱地址"; text <=> root.email; enabled: !root.busy; }
         LineEdit { placeholder-text: "密码 / 授权码"; text <=> root.password; input-type: InputType.password; enabled: !root.busy; }
         HorizontalLayout {
@@ -355,6 +359,12 @@ export component AccountDialog inherits Window {
             spacing: 8px;
             LineEdit { placeholder-text: "SMTP 服务器"; text <=> root.smtp-host; enabled: !root.busy; }
             LineEdit { placeholder-text: "465"; text <=> root.smtp-port; enabled: !root.busy; width: 80px; }
+            ComboBox {
+                width: 130px;
+                enabled: !root.busy;
+                model: ["SSL(465)", "STARTTLS(587)"];
+                current-index <=> root.smtp-tls-index;
+            }
         }
         HorizontalLayout {
             spacing: 8px;

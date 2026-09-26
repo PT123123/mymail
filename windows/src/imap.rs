@@ -1,4 +1,5 @@
-//! IMAP 封装(imap 2.4 + rustls)。v0 仅 SSL;头部/正文解析统一走 mail-parser(自带 RFC2047 解码)。
+//! IMAP 封装(imap 2.4 + rustls)。v0 仅 SSL(所有主流服务商 IMAP 均为 993/SSL);
+//! 头部/正文解析统一走 mail-parser(自带 RFC2047 解码)。
 //! 每类操作独立连接、用完即断;IDLE 用独立长连接。
 
 use crate::model::*;
@@ -17,6 +18,7 @@ pub type ImapSession = imap::Session<ImapStream>;
 use imap::extensions::idle::SetReadTimeout;
 use imap::types::{Flag, NameAttribute};
 use std::io::{Read, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// IDLE 用的流包装:把 SetReadTimeout 委托给底层 TcpStream。
 pub struct IdleStream(pub ImapStream);
@@ -83,6 +85,9 @@ impl MailClient {
 
     fn connect(&self) -> Res<ImapSession> {
         let password = self.account.password()?;
+        if self.account.imap_is_starttls() {
+            anyhow::bail!("Windows 端暂不支持 IMAP STARTTLS,请使用 SSL(通常端口 993)");
+        }
         let addr = format!("{}:{}", self.account.imap_host, self.account.imap_port);
         let tcp = TcpStream::connect(addr.as_str())
             .with_context(|| format!("连接 {} 失败", addr))?;
@@ -102,6 +107,9 @@ impl MailClient {
     /// rustls 的 StreamOwned 没有实现,包一层委托给底层 TcpStream。
     fn connect_idle(&self) -> Res<imap::Session<IdleStream>> {
         let password = self.account.password()?;
+        if self.account.imap_is_starttls() {
+            anyhow::bail!("Windows 端暂不支持 IMAP STARTTLS,请使用 SSL(通常端口 993)");
+        }
         let addr = format!("{}:{}", self.account.imap_host, self.account.imap_port);
         let tcp = TcpStream::connect(addr.as_str())
             .with_context(|| format!("连接 {} 失败", addr))?;
@@ -280,15 +288,21 @@ impl MailClient {
 
     /// 长驻 IDLE 会话:每轮最多等 9 分钟;EXISTS 变化时回调 on_wake(exists)。
     /// 回调在本线程执行,应使用独立连接做操作;出错返回 Err 由外层重连。
+    /// stop 置位后会在下一轮(≤9 分钟)正常退出并返回 Ok(())。
     pub fn idle_session_loop<F: FnMut(u32) -> Res<()>>(
         &self,
         full_name: &str,
+        stop: &AtomicBool,
         mut on_wake: F,
     ) -> Res<()> {
         let mut s = self.connect_idle()?;
         let mb = s.select(full_name)?;
         let mut last = mb.exists;
         loop {
+            if stop.load(Ordering::SeqCst) {
+                let _ = s.logout();
+                return Ok(());
+            }
             let handle = s.idle()?;
             // 最多等 9 分钟;超时或收到服务器通知都会返回,Handle 随之 drop 并完成 DONE 握手
             handle.wait_with_timeout(Duration::from_secs(9 * 60))?;

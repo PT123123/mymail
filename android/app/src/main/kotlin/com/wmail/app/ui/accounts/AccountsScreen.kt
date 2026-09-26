@@ -4,17 +4,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -37,6 +37,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wmail.app.AppContainer
+import com.wmail.app.data.db.AccountEntity
+import com.wmail.app.sync.IdleService
 import com.wmail.core.MailEndpoint
 import com.wmail.core.MailSecurity
 import kotlinx.coroutines.launch
@@ -45,8 +47,9 @@ import kotlinx.coroutines.launch
 @Composable
 fun AccountsScreen(container: AppContainer, onOpenAccount: (String) -> Unit) {
     val accounts by container.db.accountDao().list().collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
     var showAdd by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var pendingDelete by remember { mutableStateOf<AccountEntity?>(null) }
 
     Scaffold(
         topBar = {
@@ -66,6 +69,9 @@ fun AccountsScreen(container: AppContainer, onOpenAccount: (String) -> Unit) {
                     ListItem(
                         headlineContent = { Text(account.displayName) },
                         supportingContent = { Text(account.email) },
+                        trailingContent = {
+                            TextButton(onClick = { pendingDelete = account }) { Text("删除") }
+                        },
                         modifier = Modifier.clickable { onOpenAccount(account.id) },
                     )
                 }
@@ -80,28 +86,71 @@ fun AccountsScreen(container: AppContainer, onOpenAccount: (String) -> Unit) {
             onDismiss = { showAdd = false },
         )
     }
-    error?.let { message ->
+    pendingDelete?.let { account ->
         AlertDialog(
-            onDismissRequest = { error = null },
-            confirmButton = { TextButton(onClick = { error = null }) { Text("好") } },
-            title = { Text("出错了") },
-            text = { Text(message) },
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("删除账户") },
+            text = {
+                Text("删除 ${account.displayName}(${account.email})?\n本地缓存将一并删除,服务器上的邮件不受影响。")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingDelete = null
+                    IdleService.onAccountRemoved(account.id)
+                    scope.launch { container.sync.deleteAccount(account) }
+                }) { Text("删除") }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("取消") } },
         )
     }
 }
 
-private data class Preset(val label: String, val imap: MailEndpoint, val smtp: MailEndpoint) {
+/// 服务商预设(与 README「常见邮箱服务参数」及 Windows 端 PRESETS 保持一致)。
+private data class Preset(
+    val label: String,
+    val imap: MailEndpoint,
+    val smtp: MailEndpoint,
+    val hint: String,
+) {
     companion object {
         val All = listOf(
-            Preset("自定义", MailEndpoint("", 993, MailSecurity.SSL), MailEndpoint("", 465, MailSecurity.SSL)),
-            Preset("QQ 邮箱", MailEndpoint("imap.qq.com", 993, MailSecurity.SSL), MailEndpoint("smtp.qq.com", 465, MailSecurity.SSL)),
-            Preset("163 邮箱", MailEndpoint("imap.163.com", 993, MailSecurity.SSL), MailEndpoint("smtp.163.com", 465, MailSecurity.SSL)),
-            Preset("Gmail", MailEndpoint("imap.gmail.com", 993, MailSecurity.SSL), MailEndpoint("smtp.gmail.com", 465, MailSecurity.SSL)),
-            Preset("Outlook / M365", MailEndpoint("outlook.office365.com", 993, MailSecurity.SSL), MailEndpoint("smtp.office365.com", 587, MailSecurity.STARTTLS)),
+            Preset("自定义", MailEndpoint("", 993, MailSecurity.SSL), MailEndpoint("", 465, MailSecurity.SSL),
+                "按服务商说明填写服务器与端口。"),
+            Preset("QQ 邮箱", MailEndpoint("imap.qq.com", 993, MailSecurity.SSL), MailEndpoint("smtp.qq.com", 465, MailSecurity.SSL),
+                "网页版设置→账户→开启 IMAP/SMTP 服务;密码填 16 位授权码。"),
+            Preset("163 邮箱", MailEndpoint("imap.163.com", 993, MailSecurity.SSL), MailEndpoint("smtp.163.com", 465, MailSecurity.SSL),
+                "设置→POP3/SMTP/IMAP 开启服务;密码填客户端授权码。"),
+            Preset("126 邮箱", MailEndpoint("imap.126.com", 993, MailSecurity.SSL), MailEndpoint("smtp.126.com", 465, MailSecurity.SSL),
+                "同 163:开启 IMAP/SMTP 服务,密码填客户端授权码。"),
+            Preset("新浪邮箱", MailEndpoint("imap.sina.com", 993, MailSecurity.SSL), MailEndpoint("smtp.sina.com", 465, MailSecurity.SSL),
+                "需在设置中开启 IMAP/SMTP 服务,密码填授权码。"),
+            Preset("搜狐邮箱", MailEndpoint("imap.sohu.com", 993, MailSecurity.SSL), MailEndpoint("smtp.sohu.com", 465, MailSecurity.SSL),
+                "需在设置中开启 IMAP/SMTP 服务,密码填授权码。"),
+            Preset("Gmail", MailEndpoint("imap.gmail.com", 993, MailSecurity.SSL), MailEndpoint("smtp.gmail.com", 465, MailSecurity.SSL),
+                "需开启两步验证,并在 Google 账户里生成应用专用密码。"),
+            Preset("Outlook / M365", MailEndpoint("outlook.office365.com", 993, MailSecurity.SSL), MailEndpoint("smtp.office365.com", 587, MailSecurity.STARTTLS),
+                "个人账户需开两步验证并生成应用密码;企业 M365 视管理员策略而定。"),
+            Preset("Yahoo Mail", MailEndpoint("imap.mail.yahoo.com", 993, MailSecurity.SSL), MailEndpoint("smtp.mail.yahoo.com", 465, MailSecurity.SSL),
+                "在账户安全设置里生成应用专用密码。"),
+            Preset("iCloud 邮箱", MailEndpoint("imap.mail.me.com", 993, MailSecurity.SSL), MailEndpoint("smtp.mail.me.com", 587, MailSecurity.STARTTLS),
+                "在 Apple 账户「登录与安全」里生成应用专用密码。"),
+            Preset("Zoho Mail", MailEndpoint("imap.zoho.com", 993, MailSecurity.SSL), MailEndpoint("smtp.zoho.com", 465, MailSecurity.SSL),
+                "设置中开启 IMAP 访问;密码填应用专用密码。"),
+            Preset("Yandex Mail", MailEndpoint("imap.yandex.com", 993, MailSecurity.SSL), MailEndpoint("smtp.yandex.com", 465, MailSecurity.SSL),
+                "设置中启用 IMAP,并使用应用专用密码。"),
+            Preset("Fastmail", MailEndpoint("imap.fastmail.com", 993, MailSecurity.SSL), MailEndpoint("smtp.fastmail.com", 465, MailSecurity.SSL),
+                "在账户隐私与安全里生成应用专用密码。"),
+            Preset("腾讯企业邮箱", MailEndpoint("imap.exmail.qq.com", 993, MailSecurity.SSL), MailEndpoint("smtp.exmail.qq.com", 465, MailSecurity.SSL),
+                "成员端开启 IMAP/SMTP(或由管理后台开启安全登录),密码填授权码/客户端专用密码。"),
+            Preset("网易企业邮箱", MailEndpoint("imap.qiye.163.com", 993, MailSecurity.SSL), MailEndpoint("smtp.qiye.163.com", 465, MailSecurity.SSL),
+                "管理后台开启 IMAP 功能;密码填登录密码或客户端授权密码。"),
+            Preset("阿里企业邮箱", MailEndpoint("imap.mxhichina.com", 993, MailSecurity.SSL), MailEndpoint("smtp.mxhichina.com", 465, MailSecurity.SSL),
+                "由管理员开启 IMAP 服务;密码填邮箱登录密码。"),
         )
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AddAccountDialog(container: AppContainer, onDone: () -> Unit, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
@@ -120,8 +169,11 @@ private fun AddAccountDialog(container: AppContainer, onDone: () -> Unit, onDism
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text("添加账户") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     Preset.All.forEach { p ->
                         TextButton(onClick = {
                             preset = p
@@ -130,7 +182,12 @@ private fun AddAccountDialog(container: AppContainer, onDone: () -> Unit, onDism
                         }) { Text(p.label, fontSize = 12.sp) }
                     }
                 }
-                OutlinedTextField(displayName, { displayName = it }, label = { Text("显示名称(可选)") }, modifier = Modifier.fillMaxWidth())
+                Text(
+                    preset.hint,
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(displayName, { displayName = it }, label = { Text("显示名称(可选,多账号时便于区分)") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(email, { email = it }, label = { Text("邮箱地址") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(password, { password = it }, label = { Text("密码 / 授权码") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

@@ -14,11 +14,24 @@ pub struct AccountConfig {
     pub smtp_port: u16,
     /// DPAPI 加密后 base64 存盘,绝不落明文
     pub protected_password: String,
+    /// "SSL"(隐式 TLS)或 "STARTTLS";serde 缺省为空以兼容旧 accounts.json(视为 SSL)
+    #[serde(default)]
+    pub imap_security: String,
+    #[serde(default)]
+    pub smtp_security: String,
 }
 
 impl AccountConfig {
     pub fn password(&self) -> Res<String> {
         crate::dpapi::unprotect(&self.protected_password)
+    }
+
+    pub fn imap_is_starttls(&self) -> bool {
+        self.imap_security.eq_ignore_ascii_case("STARTTLS")
+    }
+
+    pub fn smtp_is_starttls(&self) -> bool {
+        self.smtp_security.eq_ignore_ascii_case("STARTTLS")
     }
 }
 

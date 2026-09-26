@@ -1,4 +1,4 @@
-//! SMTP(lettre)+ MIME 构建。v0 SSL(465 系)。
+//! SMTP(lettre)+ MIME 构建。SSL(465 系隐式 TLS)与 STARTTLS(587 系)均支持。
 
 use crate::model::*;
 use anyhow::{anyhow, Context};
@@ -81,8 +81,13 @@ pub fn build(account: &AccountConfig, input: &ComposeInput) -> Res<Message> {
 
 pub fn send(account: &AccountConfig, message: &Message) -> Res<()> {
     let password = account.password()?;
-    let transport = SmtpTransport::relay(&account.smtp_host)
-        .with_context(|| format!("SMTP 配置失败:{}", account.smtp_host))?
+    let builder = if account.smtp_is_starttls() {
+        SmtpTransport::starttls_relay(&account.smtp_host)
+    } else {
+        SmtpTransport::relay(&account.smtp_host)
+    }
+    .with_context(|| format!("SMTP 配置失败:{}", account.smtp_host))?;
+    let transport = builder
         .port(account.smtp_port)
         .credentials(Credentials::new(account.email.clone(), password))
         .build();

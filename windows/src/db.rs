@@ -262,6 +262,23 @@ pub fn count_messages(conn: &Connection, folder_id: i64) -> Res<i64> {
     Ok(v)
 }
 
+// ---------- 账户删除 ----------
+
+/// 删除账户前先取其文件夹 id(用于清理正文缓存文件)。
+pub fn folder_ids_of_account(conn: &Connection, account_id: &str) -> Res<Vec<i64>> {
+    let mut stmt = conn.prepare("SELECT id FROM folders WHERE account_id = ?1")?;
+    let rows = stmt.query_map(params![account_id], |r| r.get(0))?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+/// 清空该账户的本地缓存(messages 触发器同步维护 FTS)。
+pub fn delete_account_data(conn: &Connection, account_id: &str) -> Res<()> {
+    conn.execute("DELETE FROM messages WHERE account_id = ?1", params![account_id])?;
+    conn.execute("DELETE FROM folders WHERE account_id = ?1", params![account_id])?;
+    conn.execute("DELETE FROM outbox_ops WHERE account_id = ?1", params![account_id])?;
+    Ok(())
+}
+
 // ---------- 离线操作队列(见 docs/sync.md §离线)----------
 
 pub fn enqueue_flag_op(conn: &Connection, account_id: &str, folder_name: &str, uid: u32, payload: &str) -> Res<()> {

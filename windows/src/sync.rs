@@ -17,6 +17,8 @@ pub struct Engine {
     db: Db,
     client: MailClient,
     idle_started: AtomicBool,
+    /// 删除账户时置位,后台回填/IDLE 循环据此退出
+    stop: AtomicBool,
 }
 
 impl Engine {
@@ -26,7 +28,16 @@ impl Engine {
             account,
             db,
             idle_started: AtomicBool::new(false),
+            stop: AtomicBool::new(false),
         })
+    }
+
+    pub fn stop(&self) {
+        self.stop.store(true, Ordering::SeqCst);
+    }
+
+    fn stopped(&self) -> bool {
+        self.stop.load(Ordering::SeqCst)
     }
 
     fn conn(&self) -> std::sync::MutexGuard<'_, rusqlite::Connection> {
@@ -132,6 +143,9 @@ impl Engine {
         std::thread::spawn(move || {
             let mut failures = 0u32;
             loop {
+                if eng.stopped() {
+                    return;
+                }
                 let (cached, total) = {
                     let conn = eng.conn();
                     (
@@ -183,7 +197,13 @@ impl Engine {
         std::thread::spawn(move || {
             let mut backoff = 2u64;
             loop {
-                let result = eng.client.idle_session_loop("INBOX", |_exists| {
+                if eng.stopped() {
+                    return;
+                }
+                let result = eng.client.idle_session_loop("INBOX", &eng.stop, |_exists| {
+                    if eng.stopped() {
+                        return Err(anyhow!("引擎已停止"));
+                    }
                     let inbox = {
                         let conn = eng.conn();
                         db::find_folder_by_name(&conn, &eng.account.id, "INBOX")?
@@ -199,8 +219,11 @@ impl Engine {
                     Ok(())
                 });
                 match result {
-                    Ok(()) => break, // 正常不会返回
+                    Ok(()) => break, // stop 置位后正常退出
                     Err(e) => {
+                        if eng.stopped() {
+                            return;
+                        }
                         ui.status(format!("实时同步中断,自动重连:{e}"));
                         std::thread::sleep(Duration::from_secs(backoff));
                         backoff = (backoff * 2).min(120);

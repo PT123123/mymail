@@ -47,7 +47,10 @@ class MailSync(
         password = secrets.getPassword(account.id) ?: "",
     )
 
-    /** 添加账户:先验证 IMAP 可连再落库。 */
+    /**
+     * 添加账户:先验证 IMAP 可连再落库。
+     * 同一邮箱(同服务商或不同服务商)只能添加一次,避免重复同步混乱;同一服务商的不同邮箱可添加多个。
+     */
     suspend fun addAccount(
         displayName: String,
         email: String,
@@ -55,6 +58,9 @@ class MailSync(
         imap: MailEndpoint,
         smtp: MailEndpoint,
     ): AccountEntity = withContext(Dispatchers.IO) {
+        db.accountDao().findByEmail(email.trim())?.let {
+            throw IllegalStateException("该邮箱账户已存在")
+        }
         val id = UUID.randomUUID().toString()
         val probe = MailAccountConfig(id, displayName, email, imap, smtp, password)
         ImapClient(probe).listFolders() // 连不上会抛,账户不入库
@@ -68,6 +74,20 @@ class MailSync(
         secrets.setPassword(id, password)
         db.accountDao().insert(account)
         account
+    }
+
+    /** 删除账户:清本地缓存、正文文件与密钥;服务器上的邮件不动。 */
+    suspend fun deleteAccount(account: AccountEntity) = withContext(Dispatchers.IO) {
+        val folders = db.folderDao().listNow(account.id)
+        db.messageDao().deleteForAccount(account.id)
+        db.folderDao().deleteForAccount(account.id)
+        db.accountDao().delete(account.id)
+        secrets.remove(account.id)
+        for (f in folders) {
+            bodiesDir.listFiles()
+                ?.filter { it.name.startsWith("${f.id}_") }
+                ?.forEach { it.delete() }
+        }
     }
 
     suspend fun refreshFolders(account: AccountEntity) = withContext(Dispatchers.IO) {

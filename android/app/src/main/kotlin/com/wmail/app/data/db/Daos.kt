@@ -18,6 +18,9 @@ interface AccountDao {
     @Query("SELECT * FROM accounts WHERE id = :id")
     suspend fun byId(id: String): AccountEntity?
 
+    @Query("SELECT * FROM accounts WHERE email = :email COLLATE NOCASE LIMIT 1")
+    suspend fun findByEmail(email: String): AccountEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(account: AccountEntity)
 
@@ -38,6 +41,9 @@ interface FolderDao {
 
     @Query("SELECT * FROM folders WHERE accountId = :accountId AND fullName = :fullName")
     suspend fun find(accountId: String, fullName: String): FolderEntity?
+
+    @Query("DELETE FROM folders WHERE accountId = :accountId")
+    suspend fun deleteForAccount(accountId: String)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(folder: FolderEntity): Long
@@ -77,6 +83,9 @@ interface MessageDao {
 
     @Query("DELETE FROM messages WHERE folderId = :folderId AND uid = :uid")
     suspend fun deleteOne(folderId: Long, uid: Long)
+
+    @Query("DELETE FROM messages WHERE accountId = :accountId")
+    suspend fun deleteForAccount(accountId: String)
 
     @Query("SELECT COUNT(*) FROM messages WHERE folderId = :folderId")
     suspend fun count(folderId: Long): Int

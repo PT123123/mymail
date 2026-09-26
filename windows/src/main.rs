@@ -158,6 +158,148 @@ pub struct Prefill {
     in_reply_to: Option<String>,
 }
 
+/// 服务商预设(与 README「常见邮箱服务参数」及 Android 端 Preset.All 保持一致)。
+/// IMAP 统一 993/SSL;SMTP 分 465/SSL 与 587/STARTTLS 两种。
+struct Preset {
+    label: &'static str,
+    imap_host: &'static str,
+    smtp_host: &'static str,
+    smtp_port: u16,
+    smtp_starttls: bool,
+    hint: &'static str,
+}
+
+const PRESETS: &[Preset] = &[
+    Preset {
+        label: "自定义",
+        imap_host: "",
+        smtp_host: "",
+        smtp_port: 465,
+        smtp_starttls: false,
+        hint: "按服务商说明填写服务器与端口;IMAP 走 SSL(993)。",
+    },
+    Preset {
+        label: "QQ 邮箱",
+        imap_host: "imap.qq.com",
+        smtp_host: "smtp.qq.com",
+        smtp_port: 465,
+        smtp_starttls: false,
+        hint: "网页版设置→账户→开启 IMAP/SMTP 服务;密码填 16 位授权码。",
+    },
+    Preset {
+        label: "163 邮箱",
+        imap_host: "imap.163.com",
+        smtp_host: "smtp.163.com",
+        smtp_port: 465,
+        smtp_starttls: false,
+        hint: "设置→POP3/SMTP/IMAP 开启服务;密码填客户端授权码。",
+    },
+    Preset {
+        label: "126 邮箱",
+        imap_host: "imap.126.com",
+        smtp_host: "smtp.126.com",
+        smtp_port: 465,
+        smtp_starttls: false,
+        hint: "同 163:开启 IMAP/SMTP 服务,密码填客户端授权码。",
+    },
+    Preset {
+        label: "新浪邮箱",
+        imap_host: "imap.sina.com",
+        smtp_host: "smtp.sina.com",
+        smtp_port: 465,
+        smtp_starttls: false,
+        hint: "需在设置中开启 IMAP/SMTP 服务,密码填授权码。",
+    },
+    Preset {
+        label: "搜狐邮箱",
+        imap_host: "imap.sohu.com",
+        smtp_host: "smtp.sohu.com",
+        smtp_port: 465,
+        smtp_starttls: false,
+        hint: "需在设置中开启 IMAP/SMTP 服务,密码填授权码。",
+    },
+    Preset {
+        label: "Gmail",
+        imap_host: "imap.gmail.com",
+        smtp_host: "smtp.gmail.com",
+        smtp_port: 465,
+        smtp_starttls: false,
+        hint: "需开启两步验证,并在 Google 账户里生成应用专用密码。",
+    },
+    Preset {
+        label: "Outlook / M365",
+        imap_host: "outlook.office365.com",
+        smtp_host: "smtp.office365.com",
+        smtp_port: 587,
+        smtp_starttls: true,
+        hint: "个人账户需开两步验证并生成应用密码;企业 M365 视管理员策略而定。",
+    },
+    Preset {
+        label: "Yahoo Mail",
+        imap_host: "imap.mail.yahoo.com",
+        smtp_host: "smtp.mail.yahoo.com",
+        smtp_port: 465,
+        smtp_starttls: false,
+        hint: "在账户安全设置里生成应用专用密码。",
+    },
+    Preset {
+        label: "iCloud 邮箱",
+        imap_host: "imap.mail.me.com",
+        smtp_host: "smtp.mail.me.com",
+        smtp_port: 587,
+        smtp_starttls: true,
+        hint: "在 Apple 账户「登录与安全」里生成应用专用密码。",
+    },
+    Preset {
+        label: "Zoho Mail",
+        imap_host: "imap.zoho.com",
+        smtp_host: "smtp.zoho.com",
+        smtp_port: 465,
+        smtp_starttls: false,
+        hint: "设置中开启 IMAP 访问;密码填应用专用密码。",
+    },
+    Preset {
+        label: "Yandex Mail",
+        imap_host: "imap.yandex.com",
+        smtp_host: "smtp.yandex.com",
+        smtp_port: 465,
+        smtp_starttls: false,
+        hint: "设置中启用 IMAP,并使用应用专用密码。",
+    },
+    Preset {
+        label: "Fastmail",
+        imap_host: "imap.fastmail.com",
+        smtp_host: "smtp.fastmail.com",
+        smtp_port: 465,
+        smtp_starttls: false,
+        hint: "在账户隐私与安全里生成应用专用密码。",
+    },
+    Preset {
+        label: "腾讯企业邮箱",
+        imap_host: "imap.exmail.qq.com",
+        smtp_host: "smtp.exmail.qq.com",
+        smtp_port: 465,
+        smtp_starttls: false,
+        hint: "成员端开启 IMAP/SMTP(或由管理后台开启安全登录),密码填授权码/客户端专用密码。",
+    },
+    Preset {
+        label: "网易企业邮箱",
+        imap_host: "imap.qiye.163.com",
+        smtp_host: "smtp.qiye.163.com",
+        smtp_port: 465,
+        smtp_starttls: false,
+        hint: "管理后台开启 IMAP 功能;密码填登录密码或客户端授权密码。",
+    },
+    Preset {
+        label: "阿里企业邮箱",
+        imap_host: "imap.mxhichina.com",
+        smtp_host: "smtp.mxhichina.com",
+        smtp_port: 465,
+        smtp_starttls: false,
+        hint: "由管理员开启 IMAP 服务;密码填邮箱登录密码。",
+    },
+];
+
 fn main() -> anyhow::Result<()> {
     let db = db::open();
     let state = Arc::new(Mutex::new(AppState {
@@ -217,6 +359,47 @@ fn current_engine(ui: &Ui) -> Option<Arc<Engine>> {
     engine_for(&mut st, &acc_id, &ui.db)
 }
 
+/// 切换到 idx 处的账户:清空视图、(后台)刷新文件夹;加载失败时回退本地缓存。
+/// 由账户下拉 changed 与删除账户后的切换共用;loaded_account 守卫避免重复加载。
+fn switch_account(ui: &Ui, idx: usize) {
+    let ui = ui.clone();
+    let eng = {
+        let mut st = ui.state.lock().unwrap();
+        st.account_index = Some(idx);
+        st.folder_index = None;
+        st.folders.clear();
+        st.messages.clear();
+        let Some(acc) = st.accounts.get(idx).cloned() else {
+            return;
+        };
+        if st.loaded_account.as_deref() == Some(acc.id.as_str()) {
+            return;
+        }
+        st.loaded_account = Some(acc.id.clone());
+        engine_for(&mut st, &acc.id, &ui.db)
+    };
+    let Some(eng) = eng else {
+        ui.status("账户初始化失败");
+        return;
+    };
+    std::thread::spawn(move || match eng.refresh_folders() {
+        Ok(_) => {
+            ui.reload_folders_from_db();
+            ui.status("就绪");
+        }
+        Err(e) => {
+            // 离线:回退到缓存里的文件夹列表
+            if eng.list_folders().map(|f| !f.is_empty()).unwrap_or(false) {
+                ui.reload_folders_from_db();
+                ui.status(format!("离线模式:{e}"));
+            } else {
+                ui.status(format!("连接失败:{e}"));
+                ui.state.lock().unwrap().loaded_account = None;
+            }
+        }
+    });
+}
+
 fn current_message(ui: &Ui) -> Option<(Arc<Engine>, MessageHeader)> {
     let mut st = ui.state.lock().unwrap();
     let idx = st.message_index?;
@@ -227,6 +410,7 @@ fn current_message(ui: &Ui) -> Option<(Arc<Engine>, MessageHeader)> {
 
 fn refresh_account_model(w: &MainWindow, state: &Arc<Mutex<AppState>>) {
     let st = state.lock().unwrap();
+    // 显示名可能与别的账户重名,附加邮箱以便区分同服务商的多个账号
     let names: Vec<String> = st
         .accounts
         .iter()
@@ -234,7 +418,7 @@ fn refresh_account_model(w: &MainWindow, state: &Arc<Mutex<AppState>>) {
             if a.display_name.is_empty() {
                 a.email.clone()
             } else {
-                a.display_name.clone()
+                format!("{} ({})", a.display_name, a.email)
             }
         })
         .collect();
@@ -275,42 +459,88 @@ fn wire_main(main: &MainWindow, ui: &Ui) {
             if idx < 0 {
                 return;
             }
-            let eng = {
-                let mut st = ui.state.lock().unwrap();
-                st.account_index = Some(idx as usize);
-                st.folder_index = None;
-                st.folders.clear();
-                st.messages.clear();
-                let Some(acc) = st.accounts.get(idx as usize).cloned() else {
-                    return;
+            switch_account(&ui, idx as usize);
+        });
+    }
+
+    // ---------- 删除账户 ----------
+    {
+        let ui = ui.clone();
+        main.on_delete_account_clicked(move || {
+            let (acc_id, label) = {
+                let st = ui.state.lock().unwrap();
+                let Some(idx) = st.account_index else { return };
+                let Some(a) = st.accounts.get(idx) else { return };
+                let label = if a.display_name.is_empty() {
+                    a.email.clone()
+                } else {
+                    format!("{} ({})", a.display_name, a.email)
                 };
-                if st.loaded_account.as_deref() == Some(acc.id.as_str()) {
-                    return;
-                }
-                st.loaded_account = Some(acc.id.clone());
-                engine_for(&mut st, &acc.id, &ui.db)
+                (a.id.clone(), label)
             };
-            let Some(eng) = eng else {
-                ui.status("账户初始化失败");
+            let confirmed = rfd::MessageDialog::new()
+                .set_title("删除账户")
+                .set_description(&format!(
+                    "删除账户 {label}?\n本地缓存将一并删除,服务器上的邮件不受影响。"
+                ))
+                .set_buttons(rfd::MessageButtons::YesNo)
+                .show();
+            if confirmed != rfd::MessageDialogResult::Yes {
                 return;
-            };
-            let ui = ui.clone();
-            std::thread::spawn(move || match eng.refresh_folders() {
-                Ok(_) => {
-                    ui.reload_folders_from_db();
-                    ui.status("就绪");
+            }
+            let remaining = {
+                let mut st = ui.state.lock().unwrap();
+                // 停掉该账户的回填/IDLE 后台线程
+                if let Some(eng) = st.engines.remove(&acc_id) {
+                    eng.stop();
                 }
-                Err(e) => {
-                    // 离线:回退到缓存里的文件夹列表
-                    if eng.list_folders().map(|f| !f.is_empty()).unwrap_or(false) {
-                        ui.reload_folders_from_db();
-                        ui.status(format!("离线模式:{e}"));
-                    } else {
-                        ui.status(format!("连接失败:{e}"));
-                        ui.state.lock().unwrap().loaded_account = None;
+                let folder_ids = {
+                    let conn = ui.db.lock().unwrap();
+                    db::folder_ids_of_account(&conn, &acc_id).unwrap_or_default()
+                };
+                {
+                    let conn = ui.db.lock().unwrap();
+                    let _ = db::delete_account_data(&conn, &acc_id);
+                }
+                // 正文缓存文件按文件夹 id 前缀清理
+                let prefix_fmt = |fid: i64| format!("{fid}_");
+                for fid in folder_ids {
+                    let prefix = prefix_fmt(fid);
+                    if let Ok(entries) = std::fs::read_dir(bodies_dir()) {
+                        for e in entries.flatten() {
+                            if e.file_name().to_string_lossy().starts_with(&prefix) {
+                                let _ = std::fs::remove_file(e.path());
+                            }
+                        }
                     }
                 }
+                st.accounts.retain(|a| a.id != acc_id);
+                let _ = accounts::save(&st.accounts);
+                st.folders.clear();
+                st.messages.clear();
+                st.folder_index = None;
+                st.message_index = None;
+                st.loaded_account = None;
+                st.current_html_path = None;
+                st.current_body_text.clear();
+                st.accounts.len()
+            };
+            let state = ui.state.clone();
+            let ui2 = ui.clone();
+            ui.post(move |w| {
+                w.set_folders(ModelRc::new(VecModel::from(Vec::<FolderItem>::new())));
+                w.set_messages(ModelRc::new(VecModel::from(Vec::<MessageItem>::new())));
+                w.set_message_open(false);
+                w.set_reader_body("".into());
+                refresh_account_model(w, &state);
+                w.set_account_index(if remaining > 0 { 0 } else { -1 });
             });
+            if remaining > 0 {
+                // 切到第一个账户继续用;若与当前下拉索引相同(无 changed 事件)也能加载
+                switch_account(&ui2, 0);
+            } else {
+                ui.status("已删除账户");
+            }
         });
     }
 
@@ -820,21 +1050,23 @@ fn open_compose(ui: &Ui, prefill: Option<Prefill>) {
 
 fn open_account_dialog(ui: &Ui) {
     let win = AccountDialog::new().unwrap();
+    win.set_preset_names(ModelRc::new(VecModel::from(
+        PRESETS
+            .iter()
+            .map(|p| p.label.into())
+            .collect::<Vec<slint::SharedString>>(),
+    )));
     {
         let win_w = win.as_weak();
         win.on_preset_selected(move |idx| {
             let Some(w) = win_w.upgrade() else { return };
-            let (imap_host, imap_port, smtp_host, smtp_port) = match idx {
-                1 => ("imap.qq.com", "993", "smtp.qq.com", "465"),
-                2 => ("imap.163.com", "993", "smtp.163.com", "465"),
-                3 => ("imap.gmail.com", "993", "smtp.gmail.com", "465"),
-                4 => ("outlook.office365.com", "993", "smtp.office365.com", "587"),
-                _ => ("", "993", "", "465"),
-            };
-            w.set_imap_host(imap_host.into());
-            w.set_imap_port(imap_port.into());
-            w.set_smtp_host(smtp_host.into());
-            w.set_smtp_port(smtp_port.into());
+            let Some(p) = PRESETS.get(idx as usize) else { return };
+            w.set_imap_host(p.imap_host.into());
+            w.set_imap_port("993".into());
+            w.set_smtp_host(p.smtp_host.into());
+            w.set_smtp_port(p.smtp_port.to_string().into());
+            w.set_smtp_tls_index(if p.smtp_starttls { 1 } else { 0 });
+            w.set_status(p.hint.into());
         });
     }
 
@@ -863,6 +1095,8 @@ fn open_account_dialog(ui: &Ui) {
             smtp_host,
             smtp_port,
             protected_password: dpapi::protect(&password)?,
+            imap_security: "SSL".into(),
+            smtp_security: if win.get_smtp_tls_index() == 1 { "STARTTLS".into() } else { "SSL".into() },
         })
     }
 
