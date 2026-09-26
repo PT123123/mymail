@@ -7,7 +7,7 @@ Windows + Android 双端原生邮件客户端。两端都是独立的原生应�
 | 端 | UI 框架 | 语言 | 邮件协议 | 本地存储 |
 |---|---|---|---|---|
 | Android | Jetpack Compose (Material 3) | Kotlin | Jakarta Mail 1.6.7 | Room (SQLite) |
-| Windows | WinUI 3 (Windows App SDK) | C# | MailKit | Microsoft.Data.Sqlite (SQLite) |
+| Windows | Slint | Rust | `imap` 2.4(含 IDLE)+ `lettre`(SMTP)+ `mail-parser`(MIME) | rusqlite (SQLite) |
 
 选型理由与被否方案见 [docs/architecture.md](docs/architecture.md),同步模型见 [docs/sync.md](docs/sync.md),功能路线图见 [docs/roadmap.md](docs/roadmap.md)。
 
@@ -16,11 +16,16 @@ Windows + Android 双端原生邮件客户端。两端都是独立的原生应�
 ```
 w-mail/
 ├── docs/               # 架构 / 同步模型 / 数据模型 / 路线图
-├── windows/            # Windows 端(WinUI 3)
-│   ├── WMail.sln
+├── windows/            # Windows 端(Rust + Slint)
+│   ├── ui/app.slint    # 主窗口 / 写信 / 账户 / 移动对话框
 │   └── src/
-│       ├── WMail.Core/     # 平台无关服务层:IMAP/SMTP/SQLite 缓存/同步引擎
-│       └── WMail.App/      # WinUI 3 界面
+│       ├── imap.rs     # IMAP 封装(rustls,含 IDLE)
+│       ├── smtp.rs     # SMTP 发送 + MIME 构建
+│       ├── sync.rs     # 每账户同步引擎:缓存/回填/IDLE/离线队列
+│       ├── db.rs       # SQLite 缓存(rusqlite,含 FTS5 表)
+│       ├── accounts.rs # 账户列表持久化(JSON)
+│       ├── dpapi.rs    # DPAPI 密码加密
+│       └── main.rs     # UI 状态与事件接线
 └── android/            # Android 端(Jetpack Compose)
     ├── mailcore/       # 纯 Kotlin 邮件引擎:IMAP/SMTP/HTML 净化
     └── app/            # Compose 界面 + Room + WorkManager
@@ -29,8 +34,7 @@ w-mail/
 ## 环境要求
 
 **Windows 端**
-- .NET SDK 8+(构建)
-- 运行:`dotnet publish` 出自包含包,或安装 .NET 8 Desktop Runtime
+- Rust 工具链(rustup,MSVC target)
 
 **Android 端**
 - JDK 17、Android SDK(platforms;android-35、build-tools 35)
@@ -42,12 +46,9 @@ w-mail/
 
 ```powershell
 cd windows
-dotnet build src\WMail.App\WMail.App.csproj -c Debug -p:Platform=x64
-# 生成可直接双击运行的 exe(自包含,无需装运行时):
-dotnet publish src\WMail.App\WMail.App.csproj -c Release -p:Platform=x64 -r win-x64 --self-contained true -o publish\
+cargo run                # 开发运行
+cargo build --release    # 产物: target\release\wmail.exe(单文件,无运行时依赖)
 ```
-
-用 Visual Studio 2022 打开 `WMail.sln` 也可以(F5 调试建议装「Windows 应用程序开发」工作负载)。
 
 ### Android
 

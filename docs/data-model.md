@@ -71,13 +71,13 @@ outbox_ops(
 
 | 端 | 存哪 | 密码保护 |
 |---|---|---|
-| Windows | `%APPDATA%\WMail\accounts.json`(账户/服务器配置) | 密码字段经 **DPAPI**(`ProtectedData.CurrentUser`)加密后 base64 存 JSON |
+| Windows | `%LOCALAPPDATA%\w-mail\accounts.json`(账户/服务器配置) | 密码字段经 **DPAPI**(`CryptProtectData`,CurrentUser)加密后 base64 存 JSON |
 | Android | Room `accounts` 表(配置) | 密码存 **EncryptedSharedPreferences**(Android Keystore),DB 里只放引用标志 |
 
 配置不跨端同步(不把账户配置写进 IMAP),避免"一台设备删账户、另一端也丢"的意外;导出/导入功能放 M2 再做。
 
 ## 4. 正文缓存策略
 
-- 拉取正文时:净化后的 HTML + 纯文本落到缓存目录(`%LOCALAPPDATA%\WMail\cache` / `context.cacheDir`),DB 记路径与 `fetched_body=1`;
+- 拉取正文时:净化后的 HTML 落到缓存目录(`%LOCALAPPDATA%\w-mail\bodies` / `context.cacheDir`),DB 记路径与 `fetched_body=1`;
 - 列表页永不拉正文,只读 DB;
 - 缓存上限(默认 512MB,LRU 清理最久未读正文)放 M1。

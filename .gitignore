@@ -20,6 +20,9 @@ captures/
 .externalNativeBuild/
 .cxx/
 
+# ===== Rust =====
+target/
+
 # ===== IDE =====
 .idea/
 *.iml

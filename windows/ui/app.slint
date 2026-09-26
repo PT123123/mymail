@@ -1,0 +1,368 @@
+import { Button, ComboBox, LineEdit, ListView, ScrollView, TextEdit } from "std-widgets.slint";
+
+export struct FolderItem {
+    display: string,
+    unread-text: string,
+    has-unread: bool,
+}
+
+export struct MessageItem {
+    uid: string,
+    subject: string,
+    from: string,
+    date: string,
+    snippet: string,
+    seen: bool,
+    flagged: bool,
+    has-attach: bool,
+}
+
+export struct AttachmentItem {
+    name: string,
+}
+
+export component MainWindow inherits Window {
+    title: "w-mail";
+    preferred-width: 1280px;
+    preferred-height: 820px;
+
+    in-out property <[string]> account-names;
+    in-out property <int> account-index: -1;
+    in-out property <[FolderItem]> folders;
+    in-out property <[MessageItem]> messages;
+    in property <bool> has-account: false;
+    in property <string> status: "就绪";
+
+    in property <bool> message-open: false;
+    in property <string> reader-subject;
+    in property <string> reader-from;
+    in property <string> reader-date;
+    in property <string> reader-body;
+    in property <bool> reader-has-html: false;
+    in property <[AttachmentItem]> reader-attachments;
+    in property <bool> reader-flagged: false;
+    in property <bool> reader-seen: false;
+
+    callback add-account-clicked();
+    callback compose-clicked();
+    callback account-changed(int);
+    callback folder-selected(int);
+    callback message-selected(int);
+    callback reply-clicked();
+    callback reply-all-clicked();
+    callback forward-clicked();
+    callback toggle-flag-clicked();
+    callback toggle-read-clicked();
+    callback delete-clicked();
+    callback move-clicked();
+    callback open-html-clicked();
+    callback attachment-clicked(string);
+
+    VerticalLayout {
+        // 顶栏
+        HorizontalLayout {
+            padding: 10px;
+            spacing: 8px;
+            alignment: start;
+            Text { text: "w-mail"; font-size: 18px; font-weight: 700; vertical-alignment: center; }
+            ComboBox {
+                width: 240px;
+                enabled: root.has-account;
+                model: root.account-names;
+                current-index <=> root.account-index;
+                changed current-index => {
+                    if (self.current-index >= 0) { root.account-changed(self.current-index); }
+                }
+            }
+            Rectangle { }
+            Button { text: "添加账户"; clicked => { root.add-account-clicked(); } }
+            Button { text: "写邮件"; enabled: root.has-account; clicked => { root.compose-clicked(); } }
+        }
+
+        HorizontalLayout {
+            padding: 8px;
+            spacing: 8px;
+
+            // 文件夹栏
+            Rectangle {
+                width: 240px;
+                border-width: 1px;
+                border-color: #dddddd;
+                border-radius: 6px;
+                clip: true;
+                ListView {
+                    for folder[i] in root.folders: Rectangle {
+                        height: 42px;
+                        HorizontalLayout {
+                            padding-left: 12px;
+                            padding-right: 10px;
+                            spacing: 6px;
+                            Text {
+                                text: folder.display;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+                            Rectangle { }
+                            if folder.has-unread: Rectangle {
+                                y: 12px;
+                                width: 30px;
+                                height: 18px;
+                                border-radius: 9px;
+                                background: #0a6cff;
+                                Text {
+                                    text: folder.unread-text;
+                                    color: white;
+                                    font-size: 11px;
+                                    vertical-alignment: center;
+                                    horizontal-alignment: center;
+                                }
+                            }
+                        }
+                        TouchArea { clicked => { root.folder-selected(i); } }
+                    }
+                }
+            }
+
+            // 右侧
+            Rectangle {
+                if !root.has-account: VerticalLayout {
+                    alignment: center;
+                    spacing: 12px;
+                    Text { text: "欢迎使用 w-mail"; font-size: 24px; font-weight: 700; horizontal-alignment: center; }
+                    Text { text: "先添加一个邮箱账户,开始收发邮件。"; horizontal-alignment: center; color: #666666; }
+                    Button { text: "添加账户"; clicked => { root.add-account-clicked(); } }
+                }
+
+                if root.has-account: HorizontalLayout {
+                    spacing: 8px;
+                    // 邮件列表
+                    Rectangle {
+                        width: 400px;
+                        border-width: 1px;
+                        border-color: #dddddd;
+                        border-radius: 6px;
+                        clip: true;
+                        ListView {
+                            for msg[j] in root.messages: Rectangle {
+                                height: 84px;
+                                VerticalLayout {
+                                    padding: 8px;
+                                    spacing: 2px;
+                                    HorizontalLayout {
+                                        spacing: 6px;
+                                        if !msg.seen: Rectangle {
+                                            y: 6px;
+                                            width: 8px;
+                                            height: 8px;
+                                            border-radius: 4px;
+                                            background: #0a6cff;
+                                        }
+                                        Text {
+                                            text: msg.subject;
+                                            font-size: 14px;
+                                            font-weight: msg.seen ? 400 : 700;
+                                            overflow: elide;
+                                            vertical-alignment: center;
+                                        }
+                                        Rectangle { }
+                                        Text { text: msg.date; font-size: 11px; color: #888888; vertical-alignment: center; }
+                                    }
+                                    Text { text: msg.from; font-size: 12px; color: #444444; overflow: elide; }
+                                    HorizontalLayout {
+                                        Text { text: msg.snippet; font-size: 12px; color: #999999; overflow: elide; }
+                                        if msg.flagged: Text { text: "★"; color: #ffa000; vertical-alignment: center; }
+                                        if msg.has-attach: Text { text: "📎"; font-size: 11px; vertical-alignment: center; }
+                                    }
+                                }
+                                TouchArea { clicked => { root.message-selected(j); } }
+                            }
+                        }
+                    }
+
+                    // 阅读栏
+                    Rectangle {
+                        if root.message-open: VerticalLayout {
+                            spacing: 6px;
+                            Text { text: root.reader-subject; font-size: 18px; font-weight: 700; overflow: elide; }
+                            Text { text: root.reader-from + "   ·   " + root.reader-date; font-size: 12px; color: #666666; }
+                            HorizontalLayout {
+                                spacing: 4px;
+                                alignment: start;
+                                Button { text: "回复"; clicked => { root.reply-clicked(); } }
+                                Button { text: "全部回复"; clicked => { root.reply-all-clicked(); } }
+                                Button { text: "转发"; clicked => { root.forward-clicked(); } }
+                                Button { text: root.reader-flagged ? "取消星标" : "星标"; clicked => { root.toggle-flag-clicked(); } }
+                                Button { text: root.reader-seen ? "标为未读" : "标为已读"; clicked => { root.toggle-read-clicked(); } }
+                                Button { text: "移动…"; clicked => { root.move-clicked(); } }
+                                Button { text: "删除"; clicked => { root.delete-clicked(); } }
+                                if root.reader-has-html: Button { text: "HTML 版(浏览器)"; clicked => { root.open-html-clicked(); } }
+                            }
+                            HorizontalLayout {
+                                spacing: 6px;
+                                alignment: start;
+                                for att in root.reader-attachments: Button {
+                                    text: "📎 " + att.name;
+                                    clicked => { root.attachment-clicked(att.name); }
+                                }
+                            }
+                            Rectangle {
+                                border-width: 1px;
+                                border-color: #dddddd;
+                                border-radius: 6px;
+                                ScrollView {
+                                    Text {
+                                        x: 8px;
+                                        y: 8px;
+                                        width: parent.width - 16px;
+                                        text: root.reader-body;
+                                        font-size: 13px;
+                                        wrap: word-wrap;
+                                    }
+                                }
+                            }
+                        }
+
+                        if !root.message-open: VerticalLayout {
+                            alignment: center;
+                            Text { text: "选择一封邮件阅读"; color: #999999; horizontal-alignment: center; }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 状态栏
+        Rectangle {
+            height: 26px;
+            HorizontalLayout {
+                padding-left: 12px;
+                Text { text: root.status; font-size: 12px; color: #777777; vertical-alignment: center; overflow: elide; }
+            }
+        }
+    }
+}
+
+export component ComposeWindow inherits Window {
+    title: "写邮件";
+    preferred-width: 760px;
+    preferred-height: 680px;
+
+    in-out property <string> to-text;
+    in-out property <string> cc-text;
+    in-out property <string> subject-text;
+    in-out property <string> body-text;
+    in-out property <[AttachmentItem]> attachments;
+    in-out property <string> status;
+    in-out property <bool> busy: false;
+
+    callback send-clicked();
+    callback save-draft-clicked();
+    callback add-attachment-clicked();
+    callback cancel-clicked();
+
+    VerticalLayout {
+        padding: 14px;
+        spacing: 8px;
+        LineEdit { placeholder-text: "收件人(多个用 ; 分隔)"; text <=> root.to-text; enabled: !root.busy; }
+        LineEdit { placeholder-text: "抄送"; text <=> root.cc-text; enabled: !root.busy; }
+        LineEdit { placeholder-text: "主题"; text <=> root.subject-text; enabled: !root.busy; }
+        TextEdit {
+            min-height: 320px;
+            text <=> root.body-text;
+            enabled: !root.busy;
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: start;
+            Button { text: "添加附件"; enabled: !root.busy; clicked => { root.add-attachment-clicked(); } }
+            Button { text: "发送"; enabled: !root.busy; clicked => { root.send-clicked(); } }
+            Button { text: "存草稿"; enabled: !root.busy; clicked => { root.save-draft-clicked(); } }
+            Button { text: "取消"; enabled: !root.busy; clicked => { root.cancel-clicked(); } }
+        }
+        HorizontalLayout {
+            spacing: 6px;
+            alignment: start;
+            for att in root.attachments: Text { text: "📎 " + att.name; font-size: 12px; color: #666666; vertical-alignment: center; }
+        }
+        Text { text: root.status; font-size: 12px; color: #777777; }
+    }
+}
+
+export component MoveDialog inherits Window {
+    title: "移动到…";
+    preferred-width: 360px;
+    preferred-height: 160px;
+
+    in-out property <[string]> folder-names;
+    in-out property <int> selected-index: 0;
+
+    callback confirm(int);
+    callback cancel();
+
+    VerticalLayout {
+        padding: 14px;
+        spacing: 10px;
+        ComboBox {
+            model: root.folder-names;
+            current-index <=> root.selected-index;
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: end;
+            Button { text: "移动"; clicked => { root.confirm(root.selected-index); } }
+            Button { text: "取消"; clicked => { root.cancel(); } }
+        }
+    }
+}
+
+export component AccountDialog inherits Window {
+    title: "添加账户";
+    preferred-width: 540px;
+    preferred-height: 600px;
+
+    in-out property <string> display-name;
+    in-out property <string> email;
+    in-out property <string> password;
+    in-out property <string> imap-host;
+    in-out property <string> imap-port: "993";
+    in-out property <string> smtp-host;
+    in-out property <string> smtp-port: "465";
+    in-out property <string> status;
+    in-out property <bool> busy: false;
+
+    callback preset-selected(int);
+    callback test-clicked();
+    callback save-clicked();
+    callback cancel-clicked();
+
+    VerticalLayout {
+        padding: 14px;
+        spacing: 8px;
+        ComboBox {
+            model: ["自定义", "QQ 邮箱", "163 邮箱", "Gmail", "Outlook / M365"];
+            current-index: 0;
+            changed current-index => { root.preset-selected(self.current-index); }
+        }
+        LineEdit { placeholder-text: "显示名称(可选)"; text <=> root.display-name; enabled: !root.busy; }
+        LineEdit { placeholder-text: "邮箱地址"; text <=> root.email; enabled: !root.busy; }
+        LineEdit { placeholder-text: "密码 / 授权码"; text <=> root.password; input-type: InputType.password; enabled: !root.busy; }
+        HorizontalLayout {
+            spacing: 8px;
+            LineEdit { placeholder-text: "IMAP 服务器"; text <=> root.imap-host; enabled: !root.busy; }
+            LineEdit { placeholder-text: "993"; text <=> root.imap-port; enabled: !root.busy; width: 80px; }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            LineEdit { placeholder-text: "SMTP 服务器"; text <=> root.smtp-host; enabled: !root.busy; }
+            LineEdit { placeholder-text: "465"; text <=> root.smtp-port; enabled: !root.busy; width: 80px; }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: start;
+            Button { text: "测试连接"; enabled: !root.busy; clicked => { root.test-clicked(); } }
+            Button { text: "保存"; enabled: !root.busy; clicked => { root.save-clicked(); } }
+            Button { text: "取消"; enabled: !root.busy; clicked => { root.cancel-clicked(); } }
+        }
+        Text { text: root.status; font-size: 12px; color: #777777; wrap: word-wrap; }
+    }
+}
